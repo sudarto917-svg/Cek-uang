@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Mesin Hitung Cepat (Fixed)</title>
+    <title>Mesin Hitung Compact</title>
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- Load TensorFlow.js -->
@@ -12,32 +12,41 @@
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/knn-classifier"></script>
 
     <style>
-        body { background-color: #0f172a; color: white; font-family: sans-serif; overflow: hidden; }
+        /* Menggunakan dvh (Dynamic Viewport Height) agar pas di browser HP modern */
+        body { 
+            background-color: #0f172a; 
+            color: white; 
+            font-family: sans-serif; 
+            height: 100dvh; 
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
         
-        /* Progress Bar Animasi */
+        /* Progress Ring Compact */
         .scan-bar-container {
             position: absolute;
             top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            width: 280px; height: 280px;
+            width: 180px; height: 180px; /* Diperkecil agar muat */
             pointer-events: none;
-        }
-        
-        .scan-circle {
-            fill: none;
-            stroke: rgba(255, 255, 255, 0.1);
-            stroke-width: 10;
         }
         
         .scan-progress {
             fill: none;
-            stroke: #22c55e; /* Green */
-            stroke-width: 10;
-            stroke-dasharray: 800; /* Circumference approx */
-            stroke-dashoffset: 800; /* Start empty */
+            stroke: #22c55e;
+            stroke-width: 8;
+            stroke-dasharray: 500; 
+            stroke-dashoffset: 500;
             transition: stroke-dashoffset 0.1s linear;
             transform: rotate(-90deg);
             transform-origin: 50% 50%;
+        }
+
+        .scan-bg {
+            fill: none;
+            stroke: rgba(255,255,255,0.1);
+            stroke-width: 8;
         }
 
         .flash-effect { animation: flash 0.3s; }
@@ -46,80 +55,94 @@
             100% { background-color: transparent; }
         }
 
-        .btn-train:active { transform: scale(0.95); }
+        /* Agar tombol terasa responsif */
+        .btn-press:active { transform: scale(0.96); }
     </style>
 </head>
-<body class="flex flex-col h-screen max-w-md mx-auto relative">
+<body>
 
-    <!-- HEADER: TOTAL & RESET -->
-    <div class="bg-slate-800 px-6 py-6 rounded-b-3xl shadow-2xl z-20 flex justify-between items-center border-b border-slate-700">
+    <!-- 1. HEADER: TOTAL (Sangat Kompak) -->
+    <div class="bg-slate-800 px-4 py-3 border-b border-slate-700 shrink-0 flex justify-between items-center z-20 shadow-md">
         <div>
-            <p class="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1">Total Terhitung</p>
+            <div class="text-[10px] text-slate-400 uppercase font-bold">Total</div>
             <div class="flex items-baseline gap-1">
-                <span class="text-lg text-slate-500 font-bold">Rp</span>
-                <h1 id="grand-total" class="text-4xl font-bold text-white tracking-tighter">0</h1>
+                <span class="text-sm text-slate-500">Rp</span>
+                <h1 id="grand-total" class="text-2xl font-bold text-white">0</h1>
             </div>
         </div>
-        
-        <!-- TOMBOL RESET YANG DIPERBAIKI -->
-        <button id="btn-reset" class="bg-red-500/10 hover:bg-red-500/30 border border-red-500/30 text-red-400 p-3 rounded-xl transition-colors active:scale-95">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+        <button onclick="resetTotal()" class="bg-red-500/10 text-red-400 p-2 rounded-lg active:bg-red-500/30 border border-red-500/20">
+            <!-- Icon Sampah -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
         </button>
     </div>
 
-    <!-- AREA KAMERA -->
-    <div class="flex-1 relative bg-black overflow-hidden" id="camera-container">
-        <video id="webcam" autoplay playsinline muted class="absolute w-full h-full object-cover opacity-70"></video>
+    <!-- 2. KAMERA (FIXED HEIGHT - Tidak Full Screen) -->
+    <!-- h-60 sekitar 240px, cukup untuk uang tapi hemat tempat -->
+    <div class="relative h-60 bg-black shrink-0 overflow-hidden border-b border-slate-700" id="camera-container">
+        <video id="webcam" autoplay playsinline muted class="absolute w-full h-full object-cover opacity-80"></video>
         
-        <!-- Visual Progress Circle -->
+        <!-- Visual Ring -->
         <div class="scan-bar-container">
-            <svg width="280" height="280">
-                <circle cx="140" cy="140" r="120" class="scan-circle" />
-                <circle cx="140" cy="140" r="120" class="scan-progress" id="progress-ring" />
+            <svg width="180" height="180">
+                <circle cx="90" cy="90" r="80" class="scan-bg" />
+                <circle cx="90" cy="90" r="80" class="scan-progress" id="progress-ring" />
             </svg>
         </div>
 
-        <!-- Indikator Tengah -->
+        <!-- Label Deteksi -->
         <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <div id="detect-label" class="mt-32 text-2xl font-bold text-white drop-shadow-md opacity-0 transition-opacity">---</div>
+            <div id="detect-label" class="mt-10 text-xl font-bold text-white drop-shadow-lg bg-black/50 px-3 py-1 rounded-full opacity-0 transition-opacity">---</div>
         </div>
 
-        <!-- Loading Overlay -->
+        <!-- Loading -->
         <div id="loading" class="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center z-50">
-            <div class="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
-            <p class="mt-4 text-sm text-green-400 font-mono">Menyiapkan Sistem...</p>
+            <div class="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+            <p class="mt-2 text-xs text-green-400 font-mono">Loading AI...</p>
         </div>
     </div>
 
-    <!-- NAVIGASI MODE -->
-    <div class="flex bg-slate-900 border-t border-slate-700">
-        <button onclick="setMode('scan')" id="btn-mode-scan" class="flex-1 py-4 text-center text-green-400 border-b-2 border-green-400 bg-slate-800 transition-all">
-            💸 Mulai Hitung
+    <!-- 3. NAVIGASI TAB -->
+    <div class="flex bg-slate-800 border-b border-slate-700 shrink-0 text-sm">
+        <button onclick="setMode('scan')" id="btn-mode-scan" class="flex-1 py-3 text-center font-bold text-green-400 border-b-2 border-green-400 bg-slate-700/50">
+            Mulai Hitung
         </button>
-        <button onclick="setMode('train')" id="btn-mode-train" class="flex-1 py-4 text-center text-slate-500 hover:text-white transition-all">
-            🎓 Ajari Dulu
+        <button onclick="setMode('train')" id="btn-mode-train" class="flex-1 py-3 text-center text-slate-400 hover:text-white">
+            Ajari Dulu
         </button>
     </div>
 
-    <!-- PANEL TRAINING (Hidden) -->
-    <div id="panel-train" class="hidden absolute inset-0 top-auto h-3/4 bg-slate-900/95 backdrop-blur-md z-40 rounded-t-3xl border-t border-slate-700 flex flex-col transition-transform transform translate-y-0 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
-        <div class="p-4 border-b border-slate-700 flex justify-between items-center">
-            <h3 class="font-bold text-white flex items-center gap-2">
-                <span>🎓</span> Menu Pelatihan
-            </h3>
-            <button onclick="setMode('scan')" class="text-xs bg-green-600 hover:bg-green-500 px-4 py-2 rounded-full text-white font-bold shadow-lg">Selesai & Hitung ></button>
-        </div>
+    <!-- 4. AREA MENU / KONTROL (SCROLLABLE) -->
+    <!-- Bagian ini mengisi sisa layar (flex-1) dan bisa discroll (overflow-y-auto) -->
+    <div class="flex-1 overflow-y-auto bg-slate-900 relative p-4">
         
-        <div class="flex-1 overflow-y-auto p-4 space-y-3 pb-24">
-            <div class="bg-blue-900/30 p-3 rounded border border-blue-800 text-xs text-blue-200 mb-4">
-                <strong>PENTING:</strong> Tekan tombol kamera minimal 30-40 kali untuk setiap uang. Jangan lupa latih tombol "Meja Kosong" agar mesin tidak error.
+        <!-- A. TAMPILAN TRAINING (Default Hidden) -->
+        <div id="panel-train" class="hidden space-y-3 pb-10">
+            <div class="bg-blue-900/20 border border-blue-800 p-3 rounded text-xs text-blue-200 flex gap-2 items-start">
+                <span>ℹ️</span>
+                <p>Tekan tombol kamera <strong>30-40 kali</strong> untuk setiap uang. Wajib latih "Meja Kosong" agar tidak error.</p>
             </div>
-            <!-- Container Tombol -->
-            <div id="train-buttons" class="space-y-3"></div>
+            <!-- Tombol akan digenerate di sini -->
+            <div id="train-buttons" class="space-y-2"></div>
         </div>
+
+        <!-- B. TAMPILAN SCAN (Default Visible) -->
+        <div id="panel-scan" class="flex flex-col items-center justify-center h-full text-slate-500 space-y-4">
+            <div class="text-center p-4 border-2 border-dashed border-slate-700 rounded-xl">
+                <p class="text-sm mb-2">Status Scanner:</p>
+                <div id="scanner-status" class="text-green-400 font-bold text-lg flex items-center gap-2 justify-center">
+                    <span class="relative flex h-3 w-3">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                    </span>
+                    Standby (Siap)
+                </div>
+                <p class="text-xs mt-4 text-slate-600 max-w-[200px] mx-auto">Letakkan uang di depan kamera, tunggu lingkaran hijau penuh, lalu ganti uang berikutnya.</p>
+            </div>
+        </div>
+
     </div>
 
-    <!-- AUDIO (BEEP) -->
+    <!-- AUDIO -->
     <script>
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         function playBeep() {
@@ -129,7 +152,7 @@
             osc.type = 'sine';
             osc.frequency.setValueAtTime(800, audioCtx.currentTime);
             osc.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.1);
-            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime); // Volume pelan
             gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
             osc.connect(gain);
             gain.connect(audioCtx.destination);
@@ -141,13 +164,13 @@
     <script>
         // --- CONFIG ---
         const moneyTypes = [
-            { id: '100k', val: 100000, label: 'Rp 100.000', color: 'text-red-400' },
-            { id: '50k',  val: 50000,  label: 'Rp 50.000',  color: 'text-blue-400' },
-            { id: '20k',  val: 20000,  label: 'Rp 20.000',  color: 'text-green-400' },
-            { id: '10k',  val: 10000,  label: 'Rp 10.000',  color: 'text-purple-400' },
-            { id: '5k',   val: 5000,   label: 'Rp 5.000',   color: 'text-yellow-400' },
-            { id: '2k',   val: 2000,   label: 'Rp 2.000',   color: 'text-gray-400' },
-            { id: 'bg',   val: 0,      label: 'Meja / Kosong', color: 'text-slate-500' }
+            { id: '100k', val: 100000, label: 'Rp 100.000', color: 'text-red-400', btnColor: 'bg-red-600' },
+            { id: '50k',  val: 50000,  label: 'Rp 50.000',  color: 'text-blue-400', btnColor: 'bg-blue-600' },
+            { id: '20k',  val: 20000,  label: 'Rp 20.000',  color: 'text-green-400', btnColor: 'bg-green-600' },
+            { id: '10k',  val: 10000,  label: 'Rp 10.000',  color: 'text-purple-400', btnColor: 'bg-purple-600' },
+            { id: '5k',   val: 5000,   label: 'Rp 5.000',   color: 'text-yellow-400', btnColor: 'bg-yellow-600' },
+            { id: '2k',   val: 2000,   label: 'Rp 2.000',   color: 'text-gray-400', btnColor: 'bg-gray-600' },
+            { id: 'bg',   val: 0,      label: 'Meja / Kosong', color: 'text-slate-500', btnColor: 'bg-slate-700' }
         ];
 
         let net, classifier, webcam;
@@ -156,26 +179,25 @@
         let currentClass = null;
         let scanProgress = 0;
         let isScanningLocked = false; 
-        const SCAN_SPEED = 8; // Kecepatan scan (Makin tinggi makin cepat)
+        const SCAN_SPEED = 8; 
 
-        // --- INIT ---
         async function init() {
-            // Event Listener Tombol Reset (Lebih Aman)
-            document.getElementById('btn-reset').addEventListener('click', resetTotal);
-
             // Render Tombol Training
             const btnContainer = document.getElementById('train-buttons');
             moneyTypes.forEach(m => {
                 trainCounts[m.id] = 0;
                 const div = document.createElement('div');
-                div.className = "flex justify-between items-center bg-slate-800 p-3 rounded-xl border border-slate-700";
+                div.className = "flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-slate-700";
                 div.innerHTML = `
-                    <div>
-                        <div class="font-bold ${m.color}">${m.label}</div>
-                        <div class="text-[10px] text-slate-500" id="cnt-${m.id}">0 Sampel</div>
+                    <div class="flex items-center gap-3">
+                        <div class="w-3 h-3 rounded-full ${m.color.replace('text-', 'bg-')}"></div>
+                        <div>
+                            <div class="font-bold text-sm text-slate-200">${m.label}</div>
+                            <div class="text-[10px] text-slate-500" id="cnt-${m.id}">0 Data</div>
+                        </div>
                     </div>
                     <button onmousedown="train('${m.id}')" onmouseup="endTrain(this)" ontouchstart="train('${m.id}')" ontouchend="endTrain(this)"
-                        class="bg-slate-700 hover:bg-slate-600 text-white w-12 h-12 rounded-full flex items-center justify-center btn-train shadow-lg border border-slate-600 active:bg-green-600 transition-colors">
+                        class="bg-slate-700 hover:bg-slate-600 text-white w-12 h-10 rounded-lg flex items-center justify-center btn-press border border-slate-600 shadow-sm active:bg-blue-600 transition-colors">
                         📷
                     </button>
                 `;
@@ -195,7 +217,7 @@
                 document.getElementById('loading').classList.add('hidden');
                 loop();
             } catch (e) {
-                alert("Kamera Error (Coba refresh atau gunakan Chrome): " + e.message);
+                alert("Error Kamera: " + e.message);
             }
         }
 
@@ -205,7 +227,7 @@
                 const result = await classifier.predictClass(activation, 20);
                 processResult(result);
             }
-            requestAnimationFrame(loop); // Pindah ke loop animasi browser agar lebih smooth
+            requestAnimationFrame(loop);
         }
 
         function processResult(result) {
@@ -213,19 +235,22 @@
             const conf = result.confidences[label];
             const ring = document.getElementById('progress-ring');
             const labelUi = document.getElementById('detect-label');
+            const statusText = document.getElementById('scanner-status');
 
-            // Threshold 0.7 (70%) agar sedikit lebih responsif
+            // Threshold 0.7
             if (conf > 0.7) {
                 if (label === 'bg') {
-                    // Reset lock jika melihat meja
                     isScanningLocked = false;
                     scanProgress = 0;
-                    ring.style.strokeDashoffset = 800;
+                    ring.style.strokeDashoffset = 500; // Reset (500 = approx circumference)
                     labelUi.style.opacity = 0;
+                    statusText.innerHTML = `<span class="relative flex h-3 w-3"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span></span> Standby`;
                     return;
                 }
 
                 if (!isScanningLocked) {
+                    statusText.innerHTML = `<span class="text-yellow-400">Mendeteksi...</span>`;
+                    
                     if (label === currentClass) {
                         scanProgress += SCAN_SPEED;
                     } else {
@@ -233,18 +258,20 @@
                         scanProgress = 0;
                     }
 
-                    // Update Ring Visual
-                    const offset = 800 - (800 * (scanProgress / 100));
+                    // Update Visual
+                    // 500 is dasharray
+                    const offset = 500 - (500 * (scanProgress / 100));
                     ring.style.strokeDashoffset = offset;
                     
                     const mData = moneyTypes.find(m => m.id === label);
                     labelUi.innerText = mData.label;
-                    labelUi.className = `mt-32 text-2xl font-bold drop-shadow-md transition-opacity ${mData.color}`;
+                    labelUi.className = `mt-10 text-xl font-bold bg-black/60 px-4 py-1 rounded-full transition-opacity ${mData.color}`;
                     labelUi.style.opacity = 1;
 
                     if (scanProgress >= 100) {
                         addMoney(label);
                         isScanningLocked = true;
+                        statusText.innerHTML = `<span class="text-blue-400">✔ Terhitung! Tarik Uang.</span>`;
                     }
                 }
             } else {
@@ -259,57 +286,54 @@
             
             playBeep();
             
-            // Visual Flash
             const camContainer = document.getElementById('camera-container');
             camContainer.classList.add('flash-effect');
             setTimeout(() => camContainer.classList.remove('flash-effect'), 300);
 
-            // Reset Ring sebentar
             const ring = document.getElementById('progress-ring');
-            ring.style.stroke = "#22c55e"; 
-            setTimeout(() => { ring.style.strokeDashoffset = 800; }, 200);
+            ring.style.stroke = "#60a5fa"; // Biru saat sukses
+            setTimeout(() => { 
+                ring.style.strokeDashoffset = 500; 
+                ring.style.stroke = "#22c55e"; // Balik hijau
+            }, 200);
         }
 
-        // --- FUNGSI TRAINING ---
         function train(id) {
             const activation = net.infer(webcam, 'conv_preds');
             classifier.addExample(activation, id);
             trainCounts[id]++;
-            document.getElementById(`cnt-${id}`).innerText = `${trainCounts[id]} Sampel`;
+            document.getElementById(`cnt-${id}`).innerText = `${trainCounts[id]} Data`;
         }
         function endTrain(btn) {}
 
-        // --- FUNGSI RESET YANG DIPERBAIKI ---
         function resetTotal() {
-            if(confirm("Hapus semua total dan mulai dari 0?")) {
-                // 1. Reset Nilai Uang
+            if(confirm("Reset semua ke 0?")) {
                 totalAmount = 0;
                 document.getElementById('grand-total').innerText = "0";
-                
-                // 2. Reset Status Scanner (PENTING)
                 scanProgress = 0;
                 currentClass = null;
-                isScanningLocked = false; // Membuka kunci scanner
-                
-                // 3. Reset Visual Ring
-                document.getElementById('progress-ring').style.strokeDashoffset = 800;
+                isScanningLocked = false;
+                document.getElementById('progress-ring').style.strokeDashoffset = 500;
                 document.getElementById('detect-label').style.opacity = 0;
             }
         }
 
         function setMode(mode) {
-            const panel = document.getElementById('panel-train');
-            const btnS = document.getElementById('btn-mode-scan');
-            const btnT = document.getElementById('btn-mode-train');
+            const pTrain = document.getElementById('panel-train');
+            const pScan = document.getElementById('panel-scan');
+            const bTrain = document.getElementById('btn-mode-train');
+            const bScan = document.getElementById('btn-mode-scan');
 
             if (mode === 'train') {
-                panel.classList.remove('hidden');
-                btnT.className = "flex-1 py-4 text-center text-green-400 border-b-2 border-green-400 bg-slate-800 transition-all";
-                btnS.className = "flex-1 py-4 text-center text-slate-500 hover:text-white transition-all";
+                pTrain.classList.remove('hidden');
+                pScan.classList.add('hidden');
+                bTrain.className = "flex-1 py-3 text-center font-bold text-green-400 border-b-2 border-green-400 bg-slate-700/50";
+                bScan.className = "flex-1 py-3 text-center text-slate-400 hover:text-white";
             } else {
-                panel.classList.add('hidden');
-                btnS.className = "flex-1 py-4 text-center text-green-400 border-b-2 border-green-400 bg-slate-800 transition-all";
-                btnT.className = "flex-1 py-4 text-center text-slate-500 hover:text-white transition-all";
+                pTrain.classList.add('hidden');
+                pScan.classList.remove('hidden');
+                bScan.className = "flex-1 py-3 text-center font-bold text-green-400 border-b-2 border-green-400 bg-slate-700/50";
+                bTrain.className = "flex-1 py-3 text-center text-slate-400 hover:text-white";
             }
         }
 
