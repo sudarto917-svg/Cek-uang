@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Detektor Uang Rupiah AI</title>
+    
+    <!-- Menggunakan Tailwind CSS untuk tampilan modern tanpa ribet ngetik CSS manual -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        /* Animasi Garis Scanner */
+        @keyframes scanMove {
+            0%, 100% { top: 5%; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 95%; opacity: 0; }
+        }
+        .scanner-laser {
+            position: absolute;
+            left: 10%;
+            right: 10%;
+            height: 2px;
+            background-color: #3b82f6;
+            box-shadow: 0 0 15px #3b82f6, 0 0 30px #3b82f6;
+            animation: scanMove 2s linear infinite;
+            z-index: 10;
+        }
+        
+        /* Efek Loading */
+        .loader {
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top: 3px solid #3b82f6;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        body {
+            background-color: #111827; /* Dark Mode Background */
+            color: white;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            overflow-x: hidden;
+        }
+        
+        /* Sembunyikan scrollbar tapi tetap bisa scroll */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen max-w-md mx-auto shadow-2xl bg-gray-900 relative">
+
+    <!-- HEADER -->
+    <header class="px-5 py-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center sticky top-0 z-20">
+        <div class="flex items-center gap-2">
+            <!-- Icon Mata -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            <h1 class="text-lg font-bold tracking-wide">Rupiah<span class="text-blue-500">Lens</span></h1>
+        </div>
+        <span class="text-xs bg-blue-900 text-blue-200 px-2 py-1 rounded border border-blue-700">Beta</span>
+    </header>
+
+    <!-- AREA KAMERA UTAMA -->
+    <main class="flex-1 relative bg-black flex flex-col justify-center overflow-hidden">
+        
+        <!-- Placeholder sebelum kamera nyala -->
+        <div id="camera-placeholder" class="flex flex-col items-center justify-center p-10 text-center">
+            <div class="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center mb-4 animate-pulse">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+            </div>
+            <p class="text-gray-400 mb-6 text-sm">Izinkan akses kamera untuk mulai mendeteksi uang Rupiah.</p>
+            <button onclick="startCamera()" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-full font-semibold shadow-lg shadow-blue-900/50 transition-transform active:scale-95">
+                Mulai Kamera
+            </button>
+        </div>
+
+        <!-- Video Element (Hidden initially) -->
+        <video id="webcam" class="absolute inset-0 w-full h-full object-cover hidden" autoplay playsinline muted></video>
+        
+        <!-- Canvas untuk capture gambar (Hidden always) -->
+        <canvas id="canvas-hidden" class="hidden"></canvas>
+
+        <!-- UI Overlay saat Kamera Aktif -->
+        <div id="camera-ui" class="absolute inset-0 pointer-events-none hidden flex-col justify-between pb-8">
+            
+            <!-- Frame Pembidik -->
+            <div class="flex-1 flex items-center justify-center relative">
+                <div class="w-72 h-48 border-2 border-white/30 rounded-xl relative overflow-hidden">
+                    <!-- Sudut-sudut bingkai -->
+                    <div class="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-blue-500 rounded-tl"></div>
+                    <div class="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-blue-500 rounded-tr"></div>
+                    <div class="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-blue-500 rounded-bl"></div>
+                    <div class="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-blue-500 rounded-br"></div>
+                    
+                    <!-- Laser Scanner -->
+                    <div id="scanner-laser" class="scanner-laser hidden"></div>
+                    
+                    <div id="scanning-text" class="hidden absolute top-1/2 left-0 right-0 text-center -mt-3">
+                        <span class="bg-black/60 text-blue-300 text-xs px-3 py-1 rounded-full backdrop-blur-sm">Menganalisis...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tombol Scan -->
+            <div class="flex justify-center pointer-events-auto">
+                <button id="btn-scan" onclick="captureAndPredict()" class="w-20 h-20 bg-white/10 backdrop-blur-md border-4 border-white/30 rounded-full flex items-center justify-center hover:bg-white/20 transition-all active:scale-90">
+                    <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center">
+                        <!-- Icon Search/Scan -->
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-gray-800" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </div>
+                </button>
+            </div>
+        </div>
+
+        <!-- MODAL HASIL (Overlay) -->
+        <div id="result-modal" class="absolute inset-0 z-50 bg-black/90 backdrop-blur-sm hidden flex-col justify-end sm:justify-center p-4 transition-opacity duration-300">
+            <div class="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-2xl transform transition-all scale-100">
+                
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <p class="text-xs text-gray-400 uppercase tracking-wider font-bold">Terdeteksi</p>
+                        <h2 id="res-nominal" class="text-4xl font-bold text-white mt-1">Rp ---</h2>
+                        <p id="res-pahlawan" class="text-gray-400 text-sm mt-1">---</p>
+                    </div>
+                    <div id="res-confidence" class="bg-green-900 text-green-300 text-xs font-mono px-2 py-1 rounded border border-green-700">
+                        99%
+                    </div>
+                </div>
+
+                <div class="h-1 w-full bg-gray-700 rounded mb-6">
+                    <div id="res-bar" class="h-1 bg-green-500 rounded" style="width: 0%"></div>
+                </div>
+
+                <button onclick="closeModal()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-semibold text-lg shadow-lg transition-colors">
+                    Scan Lagi
+                </button>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- RIWAYAT (History) -->
+    <div class="h-1/3 bg-gray-800 border-t border-gray-700 flex flex-col">
+        <div class="p-4 border-b border-gray-700 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <h3 class="text-sm font-bold text-gray-300 uppercase tracking-wider">Riwayat Pindaian</h3>
+        </div>
+        <div id="history-list" class="flex-1 overflow-y-auto p-4 space-y-3 hide-scrollbar">
+            <!-- Item kosong -->
+            <div id="empty-history" class="text-center text-gray-600 text-sm py-4">
+                Belum ada riwayat scan.
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <!-- Jika Anda menggunakan Teachable Machine, tambahkan script TensorFlow.js di sini -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script> -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script> -->
+
+    <script>
+        // --- DATABASE UANG (DATA DUMMY) ---
+        // Ini digunakan untuk simulasi. Jika pakai AI asli, data ini akan di-map dari hasil prediksi AI.
+        const currencyDB = [
+            { value: 100000, label: 'Rp 100.000', pahlawan: 'Soekarno Hatta', color: 'text-red-500' },
+            { value: 50000, label: 'Rp 50.000', pahlawan: 'Djuanda Kartawidjaja', color: 'text-blue-400' },
+            { value: 20000, label: 'Rp 20.000', pahlawan: 'G.S.S.J Ratulangi', color: 'text-green-400' },
+            { value: 10000, label: 'Rp 10.000', pahlawan: 'Frans Kaisiepo', color: 'text-purple-400' },
+            { value: 5000, label: 'Rp 5.000', pahlawan: 'Idham Chalid', color: 'text-yellow-600' },
+            { value: 2000, label: 'Rp 2.000', pahlawan: 'M. Hoesni Thamrin', color: 'text-gray-400' },
+            { value: 1000, label: 'Rp 1.000', pahlawan: 'Tjut Meutia', color: 'text-green-600' }
+        ];
+
+        // --- VARIABEL ---
+        let videoStream = null;
+        let isScanning = false;
+        
+        // --- KAMERA SETUP ---
+        async function startCamera() {
+            const video = document.getElementById('webcam');
+            const placeholder = document.getElementById('camera-placeholder');
+            const ui = document.getElementById('camera-ui');
+
+            try {
+                // Meminta akses kamera belakang (environment)
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                });
+
+                videoStream = stream;
+                video.srcObject = stream;
+                
+                // Update UI
+                video.classList.remove('hidden');
+                placeholder.classList.add('hidden');
+                ui.classList.remove('hidden');
+                ui.classList.add('flex');
+
+            } catch (err) {
+                alert("Gagal mengakses kamera. Pastikan izin diberikan di browser Anda.");
+                console.error(err);
+            }
+        }
+
+        // --- FUNGSI UTAMA: CAPTURE & PREDICT ---
+        function captureAndPredict() {
+            if (isScanning) return;
+            isScanning = true;
+
+            // 1. Efek UI Scanning
+            document.getElementById('scanner-laser').classList.remove('hidden');
+            document.getElementById('scanning-text').classList.remove('hidden');
+            document.getElementById('btn-scan').classList.add('opacity-50', 'cursor-not-allowed');
+
+            // 2. Ambil Gambar dari Video (Snapshot)
+            const video = document.getElementById('webcam');
+            const canvas = document.getElementById('canvas-hidden');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // ---------------------------------------------------------
+            // AREA INTEGRASI AI (TEACHABLE MACHINE)
+            // ---------------------------------------------------------
+            // Jika Anda nanti sudah punya model, hapus bagian "SIMULASI" 
+            // dan ganti dengan kode TensorFlow.js.
+            
+            // SIMULASI AI (MENGGUNAKAN DELAY & RANDOM)
+            setTimeout(() => {
+                // Pilih uang secara acak untuk demo
+                const randomResult = currencyDB[Math.floor(Math.random() * currencyDB.length)];
+                const confidence = (Math.random() * (99 - 85) + 85).toFixed(1); // Acak 85% - 99%
+
+                showResult(randomResult, confidence);
+                addToHistory(randomResult);
+
+                // Reset UI
+                isScanning = false;
+                document.getElementById('scanner-laser').classList.add('hidden');
+                document.getElementById('scanning-text').classList.add('hidden');
+                document.getElementById('btn-scan').classList.remove('opacity-50', 'cursor-not-allowed');
+
+            }, 2000); // Pura-pura mikir 2 detik
+            // ---------------------------------------------------------
+        }
+
+        // --- MENAMPILKAN HASIL ---
+        function showResult(data, confidence) {
+            const modal = document.getElementById('result-modal');
+            
+            // Isi data ke modal
+            const labelEl = document.getElementById('res-nominal');
+            labelEl.innerText = data.label;
+            labelEl.className = `text-4xl font-bold mt-1 ${data.color}`; // Ganti warna sesuai uang
+            
+            document.getElementById('res-pahlawan').innerText = data.pahlawan;
+            document.getElementById('res-confidence').innerText = confidence + "% Akurat";
+            document.getElementById('res-bar').style.width = confidence + "%";
+
+            // Tampilkan Modal
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('result-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        // --- HISTORY ---
+        function addToHistory(data) {
+            const list = document.getElementById('history-list');
+            const emptyMsg = document.getElementById('empty-history');
+            
+            if(emptyMsg) emptyMsg.remove();
+
+            const time = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+
+            const itemHTML = `
+                <div class="bg-gray-700/50 p-3 rounded-lg flex justify-between items-center border border-gray-700 animate-[fadeIn_0.3s_ease-out]">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center text-white font-bold text-xs">$</div>
+                        <div>
+                            <div class="font-bold text-sm ${data.color}">${data.label}</div>
+                            <div class="text-xs text-gray-500">${time}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Tambah ke paling atas
+            list.insertAdjacentHTML('afterbegin', itemHTML);
+        }
+    </script>
+</body>
+</html>
+
