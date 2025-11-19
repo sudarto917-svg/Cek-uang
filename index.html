@@ -2,196 +2,318 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trainer Uang Mandiri</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mesin Hitung Cepat (Fixed)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Load Library TensorFlow.js -->
+    <!-- Load TensorFlow.js -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/knn-classifier"></script>
 
     <style>
-        body { background-color: #1a202c; color: white; font-family: sans-serif; }
-        video { transform: scaleX(-1); } /* Mirror effect */
-        .btn-press { transform: scale(0.95); transition: 0.1s; }
+        body { background-color: #0f172a; color: white; font-family: sans-serif; overflow: hidden; }
+        
+        /* Progress Bar Animasi */
+        .scan-bar-container {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 280px; height: 280px;
+            pointer-events: none;
+        }
+        
+        .scan-circle {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.1);
+            stroke-width: 10;
+        }
+        
+        .scan-progress {
+            fill: none;
+            stroke: #22c55e; /* Green */
+            stroke-width: 10;
+            stroke-dasharray: 800; /* Circumference approx */
+            stroke-dashoffset: 800; /* Start empty */
+            transition: stroke-dashoffset 0.1s linear;
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+
+        .flash-effect { animation: flash 0.3s; }
+        @keyframes flash {
+            0% { background-color: rgba(34, 197, 94, 0.5); }
+            100% { background-color: transparent; }
+        }
+
+        .btn-train:active { transform: scale(0.95); }
     </style>
 </head>
-<body class="flex flex-col min-h-screen max-w-md mx-auto bg-gray-900 pb-20">
+<body class="flex flex-col h-screen max-w-md mx-auto relative">
 
-    <!-- HEADER -->
-    <div class="p-4 bg-gray-800 shadow-lg sticky top-0 z-50 border-b border-gray-700">
-        <h1 class="text-lg font-bold text-blue-400">Self-Learning AI</h1>
-        <p class="text-xs text-gray-400">Ajarin AI mengenali uangmu sekarang juga.</p>
-    </div>
-
-    <!-- KAMERA & PREDIKSI -->
-    <div class="relative w-full bg-black h-64 flex justify-center items-center overflow-hidden">
-        <video id="webcam" autoplay playsinline muted class="absolute w-full h-full object-cover opacity-50"></video>
+    <!-- HEADER: TOTAL & RESET -->
+    <div class="bg-slate-800 px-6 py-6 rounded-b-3xl shadow-2xl z-20 flex justify-between items-center border-b border-slate-700">
+        <div>
+            <p class="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1">Total Terhitung</p>
+            <div class="flex items-baseline gap-1">
+                <span class="text-lg text-slate-500 font-bold">Rp</span>
+                <h1 id="grand-total" class="text-4xl font-bold text-white tracking-tighter">0</h1>
+            </div>
+        </div>
         
-        <!-- Loading Spinner -->
-        <div id="loading" class="z-10 flex flex-col items-center">
-            <div class="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-2"></div>
-            <p class="text-sm font-mono text-blue-300">Memuat Otak AI...</p>
+        <!-- TOMBOL RESET YANG DIPERBAIKI -->
+        <button id="btn-reset" class="bg-red-500/10 hover:bg-red-500/30 border border-red-500/30 text-red-400 p-3 rounded-xl transition-colors active:scale-95">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+        </button>
+    </div>
+
+    <!-- AREA KAMERA -->
+    <div class="flex-1 relative bg-black overflow-hidden" id="camera-container">
+        <video id="webcam" autoplay playsinline muted class="absolute w-full h-full object-cover opacity-70"></video>
+        
+        <!-- Visual Progress Circle -->
+        <div class="scan-bar-container">
+            <svg width="280" height="280">
+                <circle cx="140" cy="140" r="120" class="scan-circle" />
+                <circle cx="140" cy="140" r="120" class="scan-progress" id="progress-ring" />
+            </svg>
         </div>
 
-        <!-- Hasil Prediksi -->
-        <div id="prediction-ui" class="absolute bottom-4 left-4 right-4 bg-black/70 backdrop-blur-md p-3 rounded-lg border border-white/10 hidden">
-            <p class="text-xs text-gray-400 uppercase">Terdeteksi:</p>
-            <h2 id="result-label" class="text-2xl font-bold text-white">Belum diajari</h2>
-            <p id="confidence" class="text-xs text-green-400 mt-1">0%</p>
+        <!-- Indikator Tengah -->
+        <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <div id="detect-label" class="mt-32 text-2xl font-bold text-white drop-shadow-md opacity-0 transition-opacity">---</div>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div id="loading" class="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center z-50">
+            <div class="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+            <p class="mt-4 text-sm text-green-400 font-mono">Menyiapkan Sistem...</p>
         </div>
     </div>
 
-    <!-- PANEL KONTROL TRAINING -->
-    <div class="p-5 flex-1">
-        <div class="mb-4 bg-blue-900/30 border border-blue-800 p-3 rounded text-sm text-blue-200">
-            <strong>Cara Pakai:</strong> Arahkan kamera ke uang, lalu tekan tombol di bawah berkali-kali sampai AI pintar.
-        </div>
-
-        <!-- Tombol Kelas A (Misal 50rb) -->
-        <div class="mb-4 bg-gray-800 p-4 rounded-xl border border-gray-700">
-            <div class="flex justify-between items-center mb-2">
-                <input type="text" id="label-A" value="Uang Rp 50.000" class="bg-transparent border-b border-gray-600 text-white font-bold focus:outline-none focus:border-blue-500 w-2/3">
-                <span id="count-A" class="bg-gray-600 text-xs px-2 py-1 rounded">0 Data</span>
-            </div>
-            <button onmousedown="addExample('A')" onmouseup="stopPress(this)" ontouchstart="addExample('A')" ontouchend="stopPress(this)" 
-                class="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-lg font-semibold shadow-lg active:bg-blue-700 select-none touch-manipulation">
-                📷 Rekam Data A
-            </button>
-        </div>
-
-        <!-- Tombol Kelas B (Misal 100rb) -->
-        <div class="mb-4 bg-gray-800 p-4 rounded-xl border border-gray-700">
-            <div class="flex justify-between items-center mb-2">
-                <input type="text" id="label-B" value="Uang Rp 100.000" class="bg-transparent border-b border-gray-600 text-white font-bold focus:outline-none focus:border-green-500 w-2/3">
-                <span id="count-B" class="bg-gray-600 text-xs px-2 py-1 rounded">0 Data</span>
-            </div>
-            <button onmousedown="addExample('B')" onmouseup="stopPress(this)" ontouchstart="addExample('B')" ontouchend="stopPress(this)"
-                class="w-full bg-green-600 hover:bg-green-500 text-white py-3 rounded-lg font-semibold shadow-lg active:bg-green-700 select-none touch-manipulation">
-                📷 Rekam Data B
-            </button>
-        </div>
-
-        <!-- Tombol Kelas C (Lainnya/Background) -->
-        <div class="mb-4 bg-gray-800 p-4 rounded-xl border border-gray-700 opacity-75">
-            <div class="flex justify-between items-center mb-2">
-                <span class="text-gray-400 font-bold">Kosong / Bukan Uang</span>
-                <span id="count-C" class="bg-gray-600 text-xs px-2 py-1 rounded">0 Data</span>
-            </div>
-            <button onmousedown="addExample('C')" onmouseup="stopPress(this)" ontouchstart="addExample('C')" ontouchend="stopPress(this)"
-                class="w-full bg-gray-600 hover:bg-gray-500 text-white py-2 rounded-lg font-semibold text-sm active:bg-gray-700 select-none touch-manipulation">
-                📷 Rekam "Kosong"
-            </button>
-            <p class="text-xs text-gray-500 mt-2">*Penting: Rekam juga saat tidak ada uang agar AI tidak bingung.</p>
-        </div>
-
+    <!-- NAVIGASI MODE -->
+    <div class="flex bg-slate-900 border-t border-slate-700">
+        <button onclick="setMode('scan')" id="btn-mode-scan" class="flex-1 py-4 text-center text-green-400 border-b-2 border-green-400 bg-slate-800 transition-all">
+            💸 Mulai Hitung
+        </button>
+        <button onclick="setMode('train')" id="btn-mode-train" class="flex-1 py-4 text-center text-slate-500 hover:text-white transition-all">
+            🎓 Ajari Dulu
+        </button>
     </div>
+
+    <!-- PANEL TRAINING (Hidden) -->
+    <div id="panel-train" class="hidden absolute inset-0 top-auto h-3/4 bg-slate-900/95 backdrop-blur-md z-40 rounded-t-3xl border-t border-slate-700 flex flex-col transition-transform transform translate-y-0 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+        <div class="p-4 border-b border-slate-700 flex justify-between items-center">
+            <h3 class="font-bold text-white flex items-center gap-2">
+                <span>🎓</span> Menu Pelatihan
+            </h3>
+            <button onclick="setMode('scan')" class="text-xs bg-green-600 hover:bg-green-500 px-4 py-2 rounded-full text-white font-bold shadow-lg">Selesai & Hitung ></button>
+        </div>
+        
+        <div class="flex-1 overflow-y-auto p-4 space-y-3 pb-24">
+            <div class="bg-blue-900/30 p-3 rounded border border-blue-800 text-xs text-blue-200 mb-4">
+                <strong>PENTING:</strong> Tekan tombol kamera minimal 30-40 kali untuk setiap uang. Jangan lupa latih tombol "Meja Kosong" agar mesin tidak error.
+            </div>
+            <!-- Container Tombol -->
+            <div id="train-buttons" class="space-y-3"></div>
+        </div>
+    </div>
+
+    <!-- AUDIO (BEEP) -->
+    <script>
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playBeep() {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.1);
+        }
+    </script>
 
     <script>
-        // --- VARIABEL GLOBAL ---
-        let net;
-        let classifier;
-        let webcamElement;
-        let isModelLoaded = false;
-        let count = { A: 0, B: 0, C: 0 };
+        // --- CONFIG ---
+        const moneyTypes = [
+            { id: '100k', val: 100000, label: 'Rp 100.000', color: 'text-red-400' },
+            { id: '50k',  val: 50000,  label: 'Rp 50.000',  color: 'text-blue-400' },
+            { id: '20k',  val: 20000,  label: 'Rp 20.000',  color: 'text-green-400' },
+            { id: '10k',  val: 10000,  label: 'Rp 10.000',  color: 'text-purple-400' },
+            { id: '5k',   val: 5000,   label: 'Rp 5.000',   color: 'text-yellow-400' },
+            { id: '2k',   val: 2000,   label: 'Rp 2.000',   color: 'text-gray-400' },
+            { id: 'bg',   val: 0,      label: 'Meja / Kosong', color: 'text-slate-500' }
+        ];
 
-        // --- INISIALISASI ---
-        async function app() {
-            webcamElement = document.getElementById('webcam');
+        let net, classifier, webcam;
+        let totalAmount = 0;
+        let trainCounts = {};
+        let currentClass = null;
+        let scanProgress = 0;
+        let isScanningLocked = false; 
+        const SCAN_SPEED = 8; // Kecepatan scan (Makin tinggi makin cepat)
 
-            console.log('Memuat MobileNet...');
-            // Load model dasar (MobileNet) - ini adalah "mata" AI
-            net = await mobilenet.load();
-            
-            // Buat classifier kosong (KNN) - ini adalah "otak memori" AI
-            classifier = knnClassifier.create();
+        // --- INIT ---
+        async function init() {
+            // Event Listener Tombol Reset (Lebih Aman)
+            document.getElementById('btn-reset').addEventListener('click', resetTotal);
 
-            console.log('Model dimuat');
-            isModelLoaded = true;
-            document.getElementById('loading').classList.add('hidden');
-            document.getElementById('webcam').classList.remove('opacity-50');
-            document.getElementById('prediction-ui').classList.remove('hidden');
+            // Render Tombol Training
+            const btnContainer = document.getElementById('train-buttons');
+            moneyTypes.forEach(m => {
+                trainCounts[m.id] = 0;
+                const div = document.createElement('div');
+                div.className = "flex justify-between items-center bg-slate-800 p-3 rounded-xl border border-slate-700";
+                div.innerHTML = `
+                    <div>
+                        <div class="font-bold ${m.color}">${m.label}</div>
+                        <div class="text-[10px] text-slate-500" id="cnt-${m.id}">0 Sampel</div>
+                    </div>
+                    <button onmousedown="train('${m.id}')" onmouseup="endTrain(this)" ontouchstart="train('${m.id}')" ontouchend="endTrain(this)"
+                        class="bg-slate-700 hover:bg-slate-600 text-white w-12 h-12 rounded-full flex items-center justify-center btn-train shadow-lg border border-slate-600 active:bg-green-600 transition-colors">
+                        📷
+                    </button>
+                `;
+                btnContainer.appendChild(div);
+            });
 
-            // Setup Webcam
             try {
+                net = await mobilenet.load();
+                classifier = knnClassifier.create();
+                webcam = document.getElementById('webcam');
+                
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: 'environment', // Kamera belakang
-                        width: 640, height: 480
-                    }
+                    video: { facingMode: 'environment', width: 640, height: 480 }
                 });
-                webcamElement.srcObject = stream;
-                webcamElement.play();
+                webcam.srcObject = stream;
+                
+                document.getElementById('loading').classList.add('hidden');
+                loop();
             } catch (e) {
-                alert("Gagal akses kamera: " + e.message);
+                alert("Kamera Error (Coba refresh atau gunakan Chrome): " + e.message);
             }
+        }
 
-            // Mulai loop deteksi terus menerus
-            while (true) {
-                if (classifier.getNumClasses() > 0) {
-                    // 1. Ambil gambar dari webcam -> ubah jadi angka (activation)
-                    const activation = net.infer(webcamElement, 'conv_preds');
-                    
-                    // 2. Bandingkan dengan memori yang sudah direkam (Predict)
-                    const result = await classifier.predictClass(activation);
+        async function loop() {
+            if (classifier.getNumClasses() > 0) {
+                const activation = net.infer(webcam, 'conv_preds');
+                const result = await classifier.predictClass(activation, 20);
+                processResult(result);
+            }
+            requestAnimationFrame(loop); // Pindah ke loop animasi browser agar lebih smooth
+        }
 
-                    // 3. Tampilkan hasil
-                    updateUI(result);
+        function processResult(result) {
+            const label = result.label;
+            const conf = result.confidences[label];
+            const ring = document.getElementById('progress-ring');
+            const labelUi = document.getElementById('detect-label');
+
+            // Threshold 0.7 (70%) agar sedikit lebih responsif
+            if (conf > 0.7) {
+                if (label === 'bg') {
+                    // Reset lock jika melihat meja
+                    isScanningLocked = false;
+                    scanProgress = 0;
+                    ring.style.strokeDashoffset = 800;
+                    labelUi.style.opacity = 0;
+                    return;
                 }
-                await tf.nextFrame();
-            }
-        }
 
-        // --- FUNGSI TRAINING (REKAM DATA) ---
-        async function addExample(classId) {
-            if (!isModelLoaded) return;
+                if (!isScanningLocked) {
+                    if (label === currentClass) {
+                        scanProgress += SCAN_SPEED;
+                    } else {
+                        currentClass = label;
+                        scanProgress = 0;
+                    }
 
-            // Efek tombol ditekan
-            // Ambil gambar saat ini -> ubah jadi angka (activation)
-            const activation = net.infer(webcamElement, 'conv_preds');
+                    // Update Ring Visual
+                    const offset = 800 - (800 * (scanProgress / 100));
+                    ring.style.strokeDashoffset = offset;
+                    
+                    const mData = moneyTypes.find(m => m.id === label);
+                    labelUi.innerText = mData.label;
+                    labelUi.className = `mt-32 text-2xl font-bold drop-shadow-md transition-opacity ${mData.color}`;
+                    labelUi.style.opacity = 1;
 
-            // Simpan ke memori classifier dengan label (A, B, atau C)
-            classifier.addExample(activation, classId);
-
-            // Update counter di layar
-            count[classId]++;
-            document.getElementById(`count-${classId}`).innerText = count[classId] + " Data";
-        }
-
-        function stopPress(btn) {
-            // Fungsi kosmetik untuk efek tombol
-            btn.classList.remove('scale-95');
-        }
-
-        // --- UPDATE UI HASIL ---
-        function updateUI(result) {
-            const labelA = document.getElementById('label-A').value;
-            const labelB = document.getElementById('label-B').value;
-            
-            let textResult = "";
-            let colorClass = "text-white";
-
-            if (result.label === 'A') {
-                textResult = labelA;
-                colorClass = "text-blue-400";
-            } else if (result.label === 'B') {
-                textResult = labelB;
-                colorClass = "text-green-400";
+                    if (scanProgress >= 100) {
+                        addMoney(label);
+                        isScanningLocked = true;
+                    }
+                }
             } else {
-                textResult = "Bukan Uang / Kosong";
-                colorClass = "text-gray-400";
+                scanProgress = Math.max(0, scanProgress - 5);
             }
-
-            document.getElementById('result-label').innerText = textResult;
-            document.getElementById('result-label').className = `text-2xl font-bold ${colorClass}`;
-            
-            const conf = (result.confidences[result.label] * 100).toFixed(0);
-            document.getElementById('confidence').innerText = `Keyakinan: ${conf}%`;
         }
 
-        // Jalankan aplikasi
-        app();
+        function addMoney(id) {
+            const item = moneyTypes.find(m => m.id === id);
+            totalAmount += item.val;
+            document.getElementById('grand-total').innerText = totalAmount.toLocaleString('id-ID');
+            
+            playBeep();
+            
+            // Visual Flash
+            const camContainer = document.getElementById('camera-container');
+            camContainer.classList.add('flash-effect');
+            setTimeout(() => camContainer.classList.remove('flash-effect'), 300);
+
+            // Reset Ring sebentar
+            const ring = document.getElementById('progress-ring');
+            ring.style.stroke = "#22c55e"; 
+            setTimeout(() => { ring.style.strokeDashoffset = 800; }, 200);
+        }
+
+        // --- FUNGSI TRAINING ---
+        function train(id) {
+            const activation = net.infer(webcam, 'conv_preds');
+            classifier.addExample(activation, id);
+            trainCounts[id]++;
+            document.getElementById(`cnt-${id}`).innerText = `${trainCounts[id]} Sampel`;
+        }
+        function endTrain(btn) {}
+
+        // --- FUNGSI RESET YANG DIPERBAIKI ---
+        function resetTotal() {
+            if(confirm("Hapus semua total dan mulai dari 0?")) {
+                // 1. Reset Nilai Uang
+                totalAmount = 0;
+                document.getElementById('grand-total').innerText = "0";
+                
+                // 2. Reset Status Scanner (PENTING)
+                scanProgress = 0;
+                currentClass = null;
+                isScanningLocked = false; // Membuka kunci scanner
+                
+                // 3. Reset Visual Ring
+                document.getElementById('progress-ring').style.strokeDashoffset = 800;
+                document.getElementById('detect-label').style.opacity = 0;
+            }
+        }
+
+        function setMode(mode) {
+            const panel = document.getElementById('panel-train');
+            const btnS = document.getElementById('btn-mode-scan');
+            const btnT = document.getElementById('btn-mode-train');
+
+            if (mode === 'train') {
+                panel.classList.remove('hidden');
+                btnT.className = "flex-1 py-4 text-center text-green-400 border-b-2 border-green-400 bg-slate-800 transition-all";
+                btnS.className = "flex-1 py-4 text-center text-slate-500 hover:text-white transition-all";
+            } else {
+                panel.classList.add('hidden');
+                btnS.className = "flex-1 py-4 text-center text-green-400 border-b-2 border-green-400 bg-slate-800 transition-all";
+                btnT.className = "flex-1 py-4 text-center text-slate-500 hover:text-white transition-all";
+            }
+        }
+
+        init();
     </script>
 </body>
 </html>
